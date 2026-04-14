@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def _env(name: str, default: Optional[str] = None) -> Optional[str]:
@@ -23,16 +27,15 @@ class Settings:
         or "postgresql+asyncpg://postgres:postgres@localhost:5432/tidal"
     )
     REDIS_URL: str = _env("REDIS_URL", "redis://localhost:6379/0") or "redis://localhost:6379/0"
-    # Default mainnet RPC to match pacifica-fi/python-sdk ``rest/deposit.py``; use devnet URL + env overrides for devnet.
-    SOLANA_RPC_URL: str = _env("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com") or "https://api.mainnet-beta.solana.com"
-    USDC_MINT: str = (
-        _env("USDC_MINT", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")
-        or "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
-    )
+    
+    SOLANA_RPC_URL: str = _env("SOLANA_RPC_URL", "https://api.devnet.solana.com") or "https://api.devnet.solana.com"
+    
+    USDC_MINT: str = _env("USDC_MINT", "USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM") or "USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM"
+    
     PACIFICA_API_BASE_URL: str = (
         _env("PACIFICA_API_BASE_URL", "https://test-api.pacifica.fi") or "https://test-api.pacifica.fi"
     )
-    # On-chain deposit: defaults from pacifica-fi/python-sdk rest/deposit.py (mainnet).
+    # On-chain deposit constants
     PACIFICA_PROGRAM_ID: str = (
         _env("PACIFICA_PROGRAM_ID", "PCFA5iYgmqK6MqPhWNKg7Yv7auX7VZ4Cx7T1eJyrAMH")
         or "PCFA5iYgmqK6MqPhWNKg7Yv7auX7VZ4Cx7T1eJyrAMH"
@@ -45,17 +48,21 @@ class Settings:
         _env("PACIFICA_DEPOSIT_VAULT", "72R843XwZxqWhsJceARQQTTbYtWy6Zw9et2YV4FpRHTa")
         or "72R843XwZxqWhsJceARQQTTbYtWy6Zw9et2YV4FpRHTa"
     )
-    PACIFICA_DEPOSIT_MINT: str = (
-        _env("PACIFICA_DEPOSIT_MINT", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-        or "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-    )
-    # WebSocket: mainnet wss://ws.pacifica.fi/ws — testnet wss://test-ws.pacifica.fi/ws (see Pacifica docs).
+    
+    # This will be properly set in __post_init__ if not provided
+    PACIFICA_DEPOSIT_MINT: str = field(default_factory=lambda: _env("PACIFICA_DEPOSIT_MINT") or "")
+
     PACIFICA_WS_URL: str = _env("PACIFICA_WS_URL") or ""
-    # Minimum Pacifica margin (USD, same units as API balance fields) before starting live trading.
     TRADING_MIN_MARGIN_USD: str = _env("TRADING_MIN_MARGIN_USD", "10") or "10"
     SECRET_KEY: str = _env("SECRET_KEY", "your-super-secret-key-change-it-in-prod") or "your-super-secret-key-change-it-in-prod"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
+
+    def __post_init__(self):
+        # Handle the dynamic default for PACIFICA_DEPOSIT_MINT
+        if not self.PACIFICA_DEPOSIT_MINT:
+            # We have to use object.__setattr__ because the dataclass is frozen
+            object.__setattr__(self, "PACIFICA_DEPOSIT_MINT", self.USDC_MINT)
 
 
 settings = Settings()

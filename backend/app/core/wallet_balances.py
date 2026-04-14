@@ -66,15 +66,34 @@ async def fetch_pacifica_account_summary(
     fallback_url = f"{base}/api/v1/account"
     params = {"account": account_pubkey}
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        r = await client.get(summary_url, params=params)
-        if r.status_code == 404:
-            r = await client.get(fallback_url, params=params)
-        r.raise_for_status()
-        body = r.json()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            r = await client.get(summary_url, params=params)
+            if r.status_code == 404:
+                r = await client.get(fallback_url, params=params)
+            
+            if r.status_code == 404:
+                 return {
+                    "available_margin_collateral": 0.0,
+                    "account_equity": 0.0,
+                    "balance": 0.0,
+                }
+            
+            r.raise_for_status()
+            body = r.json()
+        except (httpx.HTTPStatusError, httpx.RequestError):
+             return {
+                "available_margin_collateral": 0.0,
+                "account_equity": 0.0,
+                "balance": 0.0,
+            }
 
     if not isinstance(body, dict):
-        raise ValueError("Unexpected Pacifica response shape")
+        return {
+            "available_margin_collateral": 0.0,
+            "account_equity": 0.0,
+            "balance": 0.0,
+        }
 
     inner = _unwrap_pacifica_payload(body)
     available = inner.get("available_to_spend") or inner.get("available_margin_collateral")

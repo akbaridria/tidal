@@ -27,46 +27,55 @@ def build_signed_market_order(
     take_profit: Optional[dict[str, str]] = None,
     stop_loss: Optional[dict[str, str]] = None,
     agent_wallet: Optional[str] = None,
-    expiry_window_ms: int = 30_000,
+    expiry_window_ms: int = 5_000,
 ) -> dict[str, Any]:
     """
-    Builds and signs a market order request for Pacifica.
-    Matches the schema provided by the user.
+    Builds and signs a market order request for Pacifica following official SDK.
     """
     timestamp = int(time.time() * 1000)
     
-    # Base order data
-    order_data: dict[str, Any] = {
+    # 1. Signature Header
+    signature_header = {
         "timestamp": timestamp,
         "expiry_window": expiry_window_ms,
+        "type": "create_market_order",
+    }
+
+    # 2. Signature Payload
+    signature_payload = {
         "symbol": symbol,
-        "amount": amount,
-        "side": side, # bid/ask
-        "slippage_percent": slippage_percent,
         "reduce_only": reduce_only,
+        "amount": amount,
+        "side": side,
+        "slippage_percent": slippage_percent,
         "client_order_id": str(uuid.uuid4()),
     }
     
     if take_profit:
-        order_data["take_profit"] = take_profit
+        signature_payload["take_profit"] = take_profit
     if stop_loss:
-        order_data["stop_loss"] = stop_loss
+        signature_payload["stop_loss"] = stop_loss
+    # Note: agent_wallet was not in the official market order example, but we keep it if present
     if agent_wallet:
-        order_data["agent_wallet"] = agent_wallet
+        signature_payload["agent_wallet"] = agent_wallet
 
-    # Signing logic (compact sorted JSON)
-    # We need to include 'account' in the message if the API expects it for the signature
-    # Most Pacifica-like APIs sign the payload WITHOUT the signature field itself
-    message_to_sign = {**order_data, "account": str(keypair.pubkey())}
+    # 3. Signing logic (Header flattened + Payload in 'data')
+    # Following official SDK: data = { **header, "data": payload }
+    message_to_sign = {
+        **signature_header,
+        "data": signature_payload
+    }
     sorted_message = sort_json_keys(message_to_sign)
     compact_json = json.dumps(sorted_message, separators=(",", ":"))
     
     signature = keypair.sign_message(compact_json.encode("utf-8"))
     signature_b58 = base58.b58encode(bytes(signature)).decode("ascii")
 
-    # Final payload includes everything
+    # 4. Construct Request (Flattened Header + Flattened Payload)
     return {
         "account": str(keypair.pubkey()),
         "signature": signature_b58,
-        **order_data
+        "timestamp": timestamp,
+        "expiry_window": expiry_window_ms,
+        **signature_payload
     }

@@ -110,17 +110,26 @@ async def broadcast_pacifica_deposit(
     )
 
     url = rpc_url or settings.SOLANA_RPC_URL
+    print(f"DEBUG: Starting Pacifica deposit. RPC={url} Program={settings.PACIFICA_PROGRAM_ID}")
     async with AsyncClient(url) as client:
-        bh = await client.get_latest_blockhash()
-        blockhash = bh.value.blockhash
-        tx = Transaction.new_signed_with_payer(
-            [ix],
-            authority,
-            [bot_keypair],
-            blockhash,
-        )
-        opts = TxOpts(skip_preflight=False, preflight_commitment=Confirmed)
-        sent = await client.send_transaction(tx, opts=opts)
+        try:
+            bh = await client.get_latest_blockhash()
+            blockhash = bh.value.blockhash
+            print(f"DEBUG: Got blockhash {blockhash}")
+            
+            tx = Transaction.new_signed_with_payer(
+                [ix],
+                authority,
+                [bot_keypair],
+                blockhash,
+            )
+            opts = TxOpts(skip_preflight=False, preflight_commitment=Confirmed)
+            print(f"DEBUG: Sending transaction for {amount} USDP...")
+            sent = await client.send_transaction(tx, opts=opts)
+            print(f"DEBUG: RPC Response: {sent}")
+        except Exception as e:
+            print(f"DEBUG: Exception during RPC call: {type(e).__name__}: {e!s}")
+            raise
 
     sig = sent.value
     if sig is None:

@@ -24,23 +24,37 @@ def build_signed_withdraw_request(
     *,
     expiry_window_ms: int = 30_000,
 ) -> dict[str, Any]:
-    """Return JSON body for ``POST /api/v1/account/withdraw`` (flat fields + signature)."""
+    """Return JSON body for ``POST /api/v1/account/withdraw`` (following official SDK)."""
     timestamp = int(time.time() * 1000)
-    data_to_sign: dict[str, Any] = {
+    
+    # 1. Signature Header
+    signature_header = {
         "timestamp": timestamp,
         "expiry_window": expiry_window_ms,
         "type": "withdraw",
-        "data": {"amount": amount_usdc},
     }
-    sorted_message = sort_json_keys(data_to_sign)
+
+    # 2. Signature Payload
+    signature_payload = {
+        "amount": amount_usdc,
+    }
+
+    # 3. Signing logic (Header flattened + Payload in 'data')
+    combined_message = {
+        **signature_header,
+        "data": signature_payload
+    }
+    sorted_message = sort_json_keys(combined_message)
     compact_json = json.dumps(sorted_message, separators=(",", ":"))
+    
     signature = keypair.sign_message(compact_json.encode("utf-8"))
     signature_b58 = base58.b58encode(bytes(signature)).decode("ascii")
 
+    # 4. Construct Request
     return {
         "account": str(keypair.pubkey()),
         "signature": signature_b58,
         "timestamp": timestamp,
         "expiry_window": expiry_window_ms,
-        "amount": amount_usdc,
+        **signature_payload
     }

@@ -22,7 +22,11 @@ from app.models.user import User
 router = APIRouter(tags=["trading"])
 
 
-from app.worker.trading_manager import initialize_bot_for_user, stop_bot_for_user
+from app.worker.trading_manager import (
+    initialize_bot_for_user, 
+    stop_bot_for_user,
+    _execute_trade  # for manual testing
+)
 
 
 @router.get("/logs")
@@ -339,3 +343,41 @@ async def start_bot(
     except Exception as e:
         logger.exception("Failed to start bot")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class ManualSignalBody(BaseModel):
+    strategy_id: uuid.UUID
+    side: str = "buy"
+
+
+@router.post("/signal")
+async def trigger_manual_signal(
+    body: ManualSignalBody,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Manually trigger a trade for a running strategy (useful for E2E testing)."""
+    result = await session.execute(
+        select(Strategy).where(
+            Strategy.id == body.strategy_id,
+            Strategy.user_id == current_user.id
+        )
+    )
+    strategy = result.scalar_one_or_none()
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="Strategy not found")
+
+    if not strategy.is_active:
+        raise HTTPException(status_code=400, detail="Bot is not running for this strategy")
+
+    # Trigger the trade execution background task
+    await _execute_trade(
+        user_id=str(current_user.id),
+        symbol_raw=strategy.trading_pair,
+        bot_config={**strategy.config, **strategy.bot_config},
+        side=body.side,
+        interval=strategy.config.get("interval", "1h"),
+        strategy_id=strategy.id
+    )
+    
+    return {"status": "success", "message": f"Manual {body.side} signal injected"}

@@ -7,11 +7,13 @@ arq
 redis
 pandas
 vectorbt
-# pandas-ta on PyPI (0.4.x) requires Python >=3.12; use a 3.12+ venv or pin an older release if you must stay on 3.9–3.11
-pandas-ta
+# Use 0.4.x for Python 3.12+
+pandas-ta>=0.4.0
 solders
 solana
 base58
 cryptography
 websockets
 python-jose[cryptography]
+python-dotenv
+greenlet

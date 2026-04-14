@@ -140,8 +140,8 @@ def _sync_fetch_last_klines(
     params = {
         "symbol": symbol,
         "interval": interval,
-        "startTime": start_ms,
-        "endTime": end_ms,
+        "start_time": start_ms,
+        "end_time": end_ms,
     }
     with httpx.Client(timeout=60.0) as client:
         r = client.get(url, params=params)
@@ -367,32 +367,37 @@ async def _execute_trade(user_id: str, symbol_raw: str, bot_config: dict[str, An
     take_profit = None
     if tp_pct > 0:
         tp_price = current_price * (1 + tp_pct/100) if api_side == "bid" else current_price * (1 - tp_pct/100)
-        take_profit = {"stop_price": str(round(tp_price, 2)), "client_order_id": str(uuid.uuid4())}
+        take_profit = {"stop_price": str(int(round(tp_price))), "client_order_id": str(uuid.uuid4())}
 
     stop_loss = None
     if sl_pct > 0:
         sl_price = current_price * (1 - sl_pct/100) if api_side == "bid" else current_price * (1 + sl_pct/100)
-        stop_loss = {"stop_price": str(round(sl_price, 2)), "client_order_id": str(uuid.uuid4())}
+        stop_loss = {"stop_price": str(int(round(sl_price))), "client_order_id": str(uuid.uuid4())}
 
     payload = build_signed_market_order(
         keypair=kp, symbol=symbol, amount=amount, side=api_side,
-        slippage_percent=slippage, take_profit=take_profit, stop_loss=stop_loss,
-        agent_wallet=wallet.public_key
+        slippage_percent=slippage, take_profit=take_profit, stop_loss=stop_loss
     )
+    logger.info("DEBUG: Order Payload for user %s: %s", user_id, payload)
 
     # 5. Send to API
     base = settings.PACIFICA_API_BASE_URL.rstrip("/")
-    url = f"{base}/api/v1/orders/create"
+    url = f"{base}/api/v1/orders/create_market"
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             r = await client.post(url, json=payload)
+            if r.status_code != 200:
+                logger.error("DEBUG: Pacifica Order Error Response: %d %s", r.status_code, r.text)
             r.raise_for_status()
             res_json = r.json()
             logger.info("Order executed successfully for sid=%s: %s", strategy_id, res_json)
             asyncio.create_task(_add_bot_log(user_id, "TRADE", f"Executed {side} order for {symbol}", strategy_id=strategy_id, details=res_json))
         except Exception as e:
-            err_msg = f"Order failed: {str(e)}"
+            err_details = ""
+            if isinstance(e, httpx.HTTPStatusError):
+                err_details = f" | Response: {e.response.text}"
+            err_msg = f"Order failed: {str(e)}{err_details}"
             logger.error(err_msg)
             asyncio.create_task(_add_bot_log(user_id, "ERROR", err_msg, strategy_id=strategy_id))
 

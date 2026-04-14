@@ -55,8 +55,8 @@ async def _get_bot_wallet(session: AsyncSession, user_id: uuid.UUID) -> BotWalle
 class DepositToPacificaBody(BaseModel):
     amount: Decimal = Field(
         ...,
-        gt=0,
-        description="USDC amount (6 dp) to deposit; must match PACIFICA_DEPOSIT_MINT / cluster (see python-sdk rest/deposit.py)",
+        ge=Decimal("20"),
+        description="USDC amount (6 dp) to deposit; must be at least 20 USDC.",
     )
 
 
@@ -91,11 +91,17 @@ async def deposit_to_pacifica(
             bot_keypair=kp,
             amount=body.amount,
         )
-    except HTTPException:
+        print(f"DEBUG: Deposit successful, sig={tx_sig}")
+    except HTTPException as e:
+        print(f"DEBUG: HTTPException in deposit_to_pacifica: {e.detail}")
         raise
     except ValueError as e:
+        print(f"DEBUG: ValueError in deposit_to_pacifica: {e!s}")
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        print(f"DEBUG: UNEXPECTED EXCEPTION in deposit_to_pacifica: {type(e).__name__}: {e!s}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=502, detail=f"Deposit transaction failed: {e!s}") from e
     finally:
         if decrypted is not None:
@@ -133,20 +139,30 @@ async def withdraw_from_pacifica(
 
         base = settings.PACIFICA_API_BASE_URL.rstrip("/")
         url = f"{base}/api/v1/account/withdraw"
+        print(f"DEBUG: Withdrawal Payload: {payload}")
         async with httpx.AsyncClient(timeout=120.0) as client:
             r = await client.post(url, json=payload)
+            if r.status_code != 200:
+                print(f"DEBUG: Pacifica Withdraw Error Response: {r.status_code} {r.text}")
             r.raise_for_status()
             resp_body = r.json()
     except HTTPException:
         raise
     except httpx.HTTPStatusError as e:
         detail = e.response.text
+        print(f"DEBUG: Pacifica withdraw failed: HTTP {e.response.status_code} {detail}")
         raise HTTPException(
             status_code=502,
             detail=f"Pacifica withdraw failed: HTTP {e.response.status_code} {detail}",
         ) from e
     except httpx.RequestError as e:
+        print(f"DEBUG: Pacifica request failed: {e!s}")
         raise HTTPException(status_code=502, detail=f"Pacifica request failed: {e!s}") from e
+    except Exception as e:
+        print(f"DEBUG: UNEXPECTED EXCEPTION in withdraw_from_pacifica: {type(e).__name__}: {e!s}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=502, detail=f"Withdrawal failed: {e!s}") from e
     finally:
         if decrypted is not None:
             del decrypted
