@@ -107,6 +107,7 @@ export interface BotConfig {
 export async function createStrategyFromPreset(body: {
   trading_pair: string
   preset_id: string
+  interval: string
   bot_config: BotConfig
 }): Promise<{ id: string; message: string }> {
   return request("/strategies/from-preset", { method: "POST", body: JSON.stringify(body) })

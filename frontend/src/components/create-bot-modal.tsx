@@ -93,6 +93,9 @@ const OPERATORS = [
   { label: "Crosses Below", value: "crossunder" },
 ]
 
+const CANDLE_INTERVALS = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d"]
+
+
 interface CreateBotModalProps {
   open: boolean
   onClose: () => void
@@ -131,10 +134,12 @@ export function CreateBotModal({
   const [botConfig, setBotConfig] = useState<BotConfig>(DEFAULT_BOT_CONFIG)
   const [deploying, setDeploying] = useState(false)
   const [deployError, setDeployError] = useState<string | null>(null)
+  const [candleInterval, setCandleInterval] = useState("1h")
 
   function resetModal() {
     setStep("pair")
     setTradingPair(TRADING_PAIRS[0].symbol)
+    setCandleInterval("1h")
     setSelectedPreset(null)
     setBotConfig(DEFAULT_BOT_CONFIG)
     setDeployError(null)
@@ -210,6 +215,7 @@ export function CreateBotModal({
 
         const config = {
           side: customSide,
+          interval: candleInterval,
           conditions: {
             operator: logicOperator,
             expressions: compiledConditions
@@ -228,6 +234,7 @@ export function CreateBotModal({
         const res = await createStrategyFromPreset({
           trading_pair: tradingPair,
           preset_id: selectedPreset!.id,
+          interval: candleInterval,
           bot_config: botConfig,
         })
         id = res.id
@@ -302,6 +309,27 @@ export function CreateBotModal({
                     {TRADING_PAIRS.map((p) => (
                       <SelectItem key={p.symbol} value={p.symbol}>
                         {p.symbol}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-white/50">
+                  Candle Interval
+                </label>
+                <Select
+                  value={candleInterval}
+                  onValueChange={(value) => { if (value) setCandleInterval(value) }}
+                >
+                  <SelectTrigger className="w-full rounded-xl border-white/[0.06] bg-white/[0.04] text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CANDLE_INTERVALS.map((intv) => (
+                      <SelectItem key={intv} value={intv}>
+                        {intv}
                       </SelectItem>
                     ))}
                   </SelectContent>

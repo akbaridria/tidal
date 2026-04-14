@@ -326,6 +326,7 @@ async def list_presets(
 class CreateFromPresetBody(BaseModel):
     trading_pair: str
     preset_id: str
+    interval: str = Field("1h", description="Candle interval (e.g. 1m, 1h)")
     bot_config: Optional[BotConfig] = Field(default_factory=BotConfig)
 
 
@@ -343,7 +344,7 @@ async def create_from_preset(
         user_id=current_user.id,
         trading_pair=body.trading_pair,
         name=preset["name"],
-        config=preset["config"],
+        config={**preset["config"], "interval": body.interval},
         bot_config=body.bot_config.dict() if body.bot_config else {},
     )
     session.add(strategy)

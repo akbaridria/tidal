@@ -276,6 +276,19 @@ def _evaluate_user_strategy(user_id: str, strategy_config: dict[str, Any], df: p
 
     try:
         evaluator = StrategyEvaluator(df, strategy_config, indicator_cache=indicator_cache)
+        
+        # Record candle snapshot trail
+        symbol = strategy_config.get("symbol", "UNKNOWN")
+        interval = strategy_config.get("interval", "1m")
+        snapshot = evaluator.get_state_snapshot()
+        price = snapshot.get("price", 0.0)
+        
+        asyncio.create_task(_add_bot_log(
+            user_id, "CANDLE", f"Candle Close: {symbol} {interval} @ {price}",
+            strategy_id=sid,
+            details=snapshot
+        ))
+
         signal = evaluator.evaluate()
 
         if signal:
@@ -456,12 +469,21 @@ async def _run_candle_listener(
     sub = {
         "method": "subscribe",
         "params": {"source": "candle", "symbol": api_symbol, "interval": interval},
+        "id": str(uuid.uuid4()),
     }
     
     attempts = 0
     while True:
         try:
-            async with websockets.connect(ws_url, ping_interval=15, ping_timeout=15) as ws:
+            # Use websockets v15+ arguments
+            async with websockets.connect(
+                ws_url, 
+                ping_interval=15, 
+                ping_timeout=15,
+                origin="https://test-api.pacifica.fi",
+                user_agent_header="TidalBot/1.0",
+                open_timeout=10
+            ) as ws:
                 attempts = 0 # Reset attempts on successful connection
                 await ws.send(json.dumps(sub))
                 async for raw in ws:

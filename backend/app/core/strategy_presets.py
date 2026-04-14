@@ -7,7 +7,6 @@ STRATEGY_PRESETS: List[Dict[str, Any]] = [
         "description": "Buy when RSI is below 30 (Oversold condition)",
         "config": {
             "side": "buy",
-            "interval": "1h",
             "conditions": {
                 "operator": "<",
                 "indicator": "RSI",
@@ -22,7 +21,6 @@ STRATEGY_PRESETS: List[Dict[str, Any]] = [
         "description": "Buy when MACD line crosses above the signal line",
         "config": {
             "side": "buy",
-            "interval": "1h",
             "conditions": {
                 "operator": "crossover",
                 "indicator": "MACD",
@@ -42,7 +40,6 @@ STRATEGY_PRESETS: List[Dict[str, Any]] = [
         "description": "Aggressive: RSI < 40 and MACD Crossover",
         "config": {
             "side": "buy",
-            "interval": "1h",
             "conditions": {
                 "operator": "AND",
                 "expressions": [
@@ -73,7 +70,6 @@ STRATEGY_PRESETS: List[Dict[str, Any]] = [
         "description": "Long-term bullish: 50 SMA crosses above 200 SMA",
         "config": {
             "side": "buy",
-            "interval": "1d",
             "conditions": {
                 "operator": "crossover",
                 "indicator": "SMA",
@@ -91,14 +87,13 @@ STRATEGY_PRESETS: List[Dict[str, Any]] = [
         "description": "Buy when price touches the lower Bollinger Band",
         "config": {
             "side": "buy",
-            "interval": "15m",
             "conditions": {
                 "operator": "<=",
                 "field": "close",
                 "compare": {
                     "indicator": "BBANDS",
                     "params": {"period": 20, "std": 2.0},
-                    "field": "BBL_20_2.0"
+                    "field": "BBL"
                 }
             }
         }

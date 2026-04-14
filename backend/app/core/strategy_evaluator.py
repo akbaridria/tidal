@@ -145,6 +145,55 @@ class StrategyEvaluator:
         
         return self._evaluate_recursive_vectorized(conditions)
 
+    def get_state_snapshot(self) -> dict[str, float]:
+        """Collects current indicator values and price for logging."""
+        snapshot = {"price": float(self.df["close"].iloc[-1])}
+        
+        conditions = self.config.get("conditions")
+        if conditions:
+            self._collect_values_recursive(conditions, snapshot)
+        
+        return snapshot
+
+    def _collect_values_recursive(self, node: dict[str, Any], snapshot: dict[str, float]) -> None:
+        operator = node.get("operator", "AND").upper()
+        if operator in ("AND", "OR"):
+            for exp in node.get("expressions", []):
+                self._collect_values_recursive(exp, snapshot)
+            return
+
+        # Leaf node
+        self._add_node_to_snapshot(node, snapshot)
+        if "compare" in node:
+            self._add_node_to_snapshot(node["compare"], snapshot)
+
+    def _add_node_to_snapshot(self, node: dict[str, Any], snapshot: dict[str, float]) -> None:
+        if "value" in node:
+            return
+        
+        indicator = node.get("indicator")
+        field = node.get("field")
+        
+        if indicator:
+            params = node.get("params", {})
+            # Sort params for deterministic keys
+            sorted_params = sorted(params.items())
+            param_str = ",".join(f"{k}={v}" for k, v in sorted_params)
+            key = f"{indicator}({param_str})"
+            if field:
+                key += f".{field}"
+            
+            try:
+                val = self._get_value(node, index=-1)
+                snapshot[key] = float(val)
+            except Exception:
+                snapshot[key] = 0.0
+        elif field and field != "close":
+            try:
+                snapshot[field] = float(self.df[field].iloc[-1])
+            except Exception:
+                snapshot[field] = 0.0
+
     def _evaluate_recursive(self, node: dict[str, Any], index: int) -> bool:
         operator = node.get("operator", "AND").upper()
         
