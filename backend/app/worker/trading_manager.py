@@ -298,6 +298,8 @@ def _evaluate_user_strategy(user_id: str, strategy_config: dict[str, Any], df: p
         logger.exception("Strategy evaluation failed user=%s sid=%s", user_id, sid_str)
         asyncio.create_task(_add_bot_log(user_id, "ERROR", f"Strategy evaluation failed: {str(e)}", strategy_id=sid))
 
+from app.models.strategy import Strategy
+
 async def _execute_trade(user_id: str, symbol_raw: str, bot_config: dict[str, Any], side: str, interval: str, strategy_id: Optional[uuid.UUID] = None) -> None:
     """
     Executes a market order on Pacifica with SL/TP/Slippage.
@@ -305,17 +307,23 @@ async def _execute_trade(user_id: str, symbol_raw: str, bot_config: dict[str, An
     uid = uuid.UUID(user_id)
 
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(BotWallet).where(BotWallet.user_id == uid))
-        wallet = result.scalar_one_or_none()
+        # Load strategy to get subaccount info
+        if not strategy_id:
+             logger.error("No strategy_id provided for trade execution")
+             return
+             
+        strat_res = await session.execute(select(Strategy).where(Strategy.id == strategy_id))
+        strategy = strat_res.scalar_one_or_none()
 
-    if not wallet:
-        err_msg = f"No bot wallet found for user {user_id}"
+    if not strategy or not strategy.subaccount_pubkey or not strategy.subaccount_encrypted_pk:
+        err_msg = f"No subaccount found for strategy {strategy_id}"
         logger.error(err_msg)
         asyncio.create_task(_add_bot_log(user_id, "ERROR", err_msg, strategy_id=strategy_id))
         return
 
-    decrypted = decrypt_key(wallet.encrypted_private_key)
+    decrypted = decrypt_key(strategy.subaccount_encrypted_pk)
     kp = Keypair.from_base58_string(decrypted)
+    subaccount_pubkey = strategy.subaccount_pubkey
 
     # 1. Normalize symbol
     symbol = _normalize_symbol_for_api(symbol_raw)
@@ -324,7 +332,7 @@ async def _execute_trade(user_id: str, symbol_raw: str, bot_config: dict[str, An
     try:
         base = settings.PACIFICA_API_BASE_URL.rstrip("/")
         pos_url = f"{base}/api/v1/positions"
-        params = {"account": wallet.public_key}
+        params = {"account": subaccount_pubkey}
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(pos_url, params=params)
             resp.raise_for_status()
@@ -334,12 +342,12 @@ async def _execute_trade(user_id: str, symbol_raw: str, bot_config: dict[str, An
                 if p.get("symbol") == symbol:
                     amt = float(p.get("amount", 0))
                     if abs(amt) > 0:
-                        msg = f"User {user_id} already has an open position for {symbol}. Skipping trade."
+                        msg = f"Strategy {strategy_id} already has an open position for {symbol}. Skipping trade."
                         logger.info(msg)
                         asyncio.create_task(_add_bot_log(user_id, "INFO", msg, strategy_id=strategy_id))
                         return
     except Exception as e:
-        err_msg = f"Failed to check positions for user {user_id}: {str(e)}"
+        err_msg = f"Failed to check positions for strategy {strategy_id}: {str(e)}"
         logger.error(err_msg)
         asyncio.create_task(_add_bot_log(user_id, "ERROR", err_msg, strategy_id=strategy_id))
         return
@@ -597,30 +605,74 @@ async def initialize_bot_for_user(
         raise UnsupportedSymbolError(
             f"Symbol {symbol_raw!r} (normalized {api_symbol!r}) is not active on Pacifica",
         )
-
     from sqlalchemy import select
-
     from app.core.database import AsyncSessionLocal
     from app.models.bot_wallet import BotWallet
+    from app.core.pacifica_subaccount import create_subaccount, transfer_subaccount_fund
+    from app.core.crypto import encrypt_key
+    import base58
+    from solders.keypair import Keypair
 
     uid = uuid.UUID(uid_str) if isinstance(user_id, str) else user_id
+    strategy_uuid = uuid.UUID(strategy_config.get("strategy_id"))
+
     async with AsyncSessionLocal() as session:
+        # Load bot wallet
         result = await session.execute(select(BotWallet).where(BotWallet.user_id == uid))
         wallet = result.scalar_one_or_none()
-    if wallet is None:
-        raise TradingBotError("No bot wallet found for user")
+        if wallet is None:
+            raise TradingBotError("No bot wallet found for user")
 
-    private_key = decrypt_key(wallet.encrypted_private_key)
-    try:
-        summary = await fetch_pacifica_account_summary(wallet.public_key, private_key)
-    finally:
-        del private_key
-    margin = _parse_margin_usd(summary)
-    min_margin = Decimal(str(settings.TRADING_MIN_MARGIN_USD))
-    if margin < min_margin:
-        raise InsufficientMarginError(
-            f"Insufficient Margin: available {margin} < minimum {min_margin} USD",
-        )
+        # Load strategy
+        strat_res = await session.execute(select(Strategy).where(Strategy.id == strategy_uuid))
+        strategy = strat_res.scalar_one_or_none()
+        if strategy is None:
+            raise TradingBotError("Strategy not found")
+
+        private_key = decrypt_key(wallet.encrypted_private_key)
+        main_kp = Keypair.from_base58_string(private_key)
+
+        # Create subaccount if it doesn't exist
+        if not strategy.subaccount_pubkey:
+            logger.info("Initializing Pacifica subaccount for strategy %s", strategy_uuid)
+            sub_keypair = Keypair()
+            raw_sub_pk = base58.b58encode(sub_keypair.to_bytes()).decode("ascii")
+            buf = bytearray(raw_sub_pk.encode("utf-8"))
+            encrypted_sub_pk = encrypt_key(bytes(buf))
+
+            try:
+                # 1. Create subaccount
+                await create_subaccount(main_kp, sub_keypair)
+
+                # 2. Transfer funds to subaccount
+                bot_cfg = strategy_config.get("bot_config", {})
+                size_usd = float(bot_cfg.get("size_usd", 100))
+                logger.info("Transferring %s USD to subaccount %s", size_usd, sub_keypair.pubkey())
+                await transfer_subaccount_fund(main_kp, str(sub_keypair.pubkey()), str(size_usd))
+
+                # 3. Save to database
+                strategy.subaccount_pubkey = str(sub_keypair.pubkey())
+                strategy.subaccount_encrypted_pk = encrypted_sub_pk
+                await session.commit()
+            except Exception as e:
+                logger.error("Failed to initialize subaccount: %s", e)
+                raise TradingBotError(f"Failed to initialize subaccount: {e}")
+
+        # Check subaccount margin
+        try:
+            sub_pk_str = decrypt_key(strategy.subaccount_encrypted_pk)
+            summary = await fetch_pacifica_account_summary(strategy.subaccount_pubkey, sub_pk_str)
+            del sub_pk_str
+        finally:
+            del private_key
+
+        available = float(summary.get("available_margin_collateral") or 0)
+        margin = Decimal(str(available))
+        min_margin = Decimal(str(settings.TRADING_MIN_MARGIN_USD))
+        if margin < min_margin:
+            raise InsufficientMarginError(
+                f"Insufficient Margin: available {margin} < minimum {min_margin} USD",
+            )
 
     async with _multiplex_lock:
         if skey in active_streams and skey in _runtimes:

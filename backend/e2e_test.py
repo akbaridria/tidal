@@ -176,7 +176,7 @@ async def run_e2e():
         # 5. EXECUTION
         print("\n--- 5. Strategy Execution ---")
         strat_res = await client.post(f"{API_BASE_URL}/strategies/from-preset", 
-                                   json={"trading_pair": "BTC-PERP", "preset_id": "rsi_oversold"}, 
+                                   json={"trading_pair": "BTC-PERP", "preset_id": "rsi_oversold", "bot_config": {"size_usd": 20.0}}, 
                                    headers=headers)
         strat_res.raise_for_status()
         strat = strat_res.json()["id"]
@@ -235,7 +235,7 @@ async def run_e2e():
         target_bot_usdc = pre_withdraw_balances["bot"]["usdc"] + 0.1
 
         print("Step A: Withdrawing from Pacifica to Bot Wallet...")
-        withdraw_p = await client.post(f"{API_BASE_URL}/wallet/withdraw-from-pacifica", json={"amount": 21.5}, headers=headers)
+        withdraw_p = await client.post(f"{API_BASE_URL}/wallet/withdraw-from-pacifica", json={"amount": 1.5}, headers=headers)
         withdraw_p.raise_for_status()
         print(f"   > Withdrawal request sent. TX: {withdraw_p.json().get('transaction_hash')}")
         

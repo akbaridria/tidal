@@ -23,3 +23,6 @@ class Strategy(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     bot_config: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     is_active: Mapped[bool] = mapped_column(default=False, index=True)
+    
+    subaccount_pubkey: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    subaccount_encrypted_pk: Mapped[Optional[bytes]] = mapped_column(nullable=True)
