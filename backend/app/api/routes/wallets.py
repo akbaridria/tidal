@@ -85,11 +85,17 @@ async def get_wallet_balances(
                 detail="Stored private key does not match public key",
             )
 
-        (sol, lamports), usdc, pacifica = await asyncio.gather(
+        (sol, lamports), usdc, (u_sol, u_lamports), u_usdc, pacifica = await asyncio.gather(
             fetch_native_sol_balance_sol(settings.SOLANA_RPC_URL, wallet.public_key),
             fetch_spl_usdc_balance(
                 settings.SOLANA_RPC_URL,
                 wallet.public_key,
+                settings.USDC_MINT,
+            ),
+            fetch_native_sol_balance_sol(settings.SOLANA_RPC_URL, current_user.public_key),
+            fetch_spl_usdc_balance(
+                settings.SOLANA_RPC_URL,
+                current_user.public_key,
                 settings.USDC_MINT,
             ),
             fetch_pacifica_account_summary(wallet.public_key, decrypted),
@@ -117,9 +123,14 @@ async def get_wallet_balances(
             "sol_lamports": lamports,
             "usdc": usdc,
         },
+        "user_wallet_balance": {
+            "sol": u_sol,
+            "sol_lamports": u_lamports,
+            "usdc": u_usdc,
+        },
         "pacifica_balance": {
-            "available_margin_collateral": pacifica.get("available_margin_collateral"),
-            "account_equity": pacifica.get("account_equity"),
-            "balance": pacifica.get("balance"),
+            "available_margin_collateral": float(pacifica.get("available_margin_collateral") or 0.0),
+            "account_equity": float(pacifica.get("account_equity") or 0.0),
+            "balance": float(pacifica.get("balance") or 0.0),
         },
     }

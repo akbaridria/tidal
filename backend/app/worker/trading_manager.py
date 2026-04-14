@@ -445,16 +445,6 @@ def _candle_payload_to_row(data: dict[str, Any]) -> tuple[int, float, float, flo
     )
 
 
-async def _ping_loop(ws: Any) -> None:
-    try:
-        while True:
-            await asyncio.sleep(30)
-            await ws.send(json.dumps({"method": "ping"}))
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        logger.debug("ping loop exit", exc_info=True)
-
 
 async def _run_candle_listener(
     *,
@@ -468,16 +458,13 @@ async def _run_candle_listener(
         "params": {"source": "candle", "symbol": api_symbol, "interval": interval},
     }
     
-    # Task 4: Resilient WebSocket Reconnections
     attempts = 0
     while True:
         try:
-            async with websockets.connect(ws_url, ping_interval=None, ping_timeout=None) as ws:
+            async with websockets.connect(ws_url, ping_interval=15, ping_timeout=15) as ws:
                 attempts = 0 # Reset attempts on successful connection
                 await ws.send(json.dumps(sub))
-                ping_task = asyncio.create_task(_ping_loop(ws))
-                try:
-                    async for raw in ws:
+                async for raw in ws:
                         if isinstance(raw, (bytes, bytearray)):
                             raw = raw.decode()
                         if not isinstance(raw, str):
@@ -516,17 +503,13 @@ async def _run_candle_listener(
 
                         if should_eval:
                             await _evaluate_all_subscribers(key)
-                finally:
-                    ping_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await ping_task
         except asyncio.CancelledError:
             # Task was cancelled (e.g. last subscriber left)
             raise
         except Exception as e:
             attempts += 1
             delay = min(2 ** attempts, 60)
-            logger.exception("Candle WebSocket failed stream=%s. Retrying in %ds... Error: %s", key, delay, str(e))
+            logger.warning("Candle WebSocket disconnected stream=%s. Retrying in %d s... Error: %s", key, delay, str(e))
             await asyncio.sleep(delay)
 
 
@@ -645,10 +628,13 @@ async def initialize_bot_for_user(
                 await create_subaccount(main_kp, sub_keypair)
 
                 # 2. Transfer funds to subaccount
-                bot_cfg = strategy_config.get("bot_config", {})
-                size_usd = float(bot_cfg.get("size_usd", 100))
-                logger.info("Transferring %s USD to subaccount %s", size_usd, sub_keypair.pubkey())
-                await transfer_subaccount_fund(main_kp, str(sub_keypair.pubkey()), str(size_usd))
+                if strategy_config.get("allocate_margin", True):
+                    bot_cfg = strategy_config.get("bot_config", {})
+                    size_usd = float(bot_cfg.get("size_usd", 100))
+                    logger.info("Transferring %s USD to subaccount %s", size_usd, sub_keypair.pubkey())
+                    await transfer_subaccount_fund(main_kp, str(sub_keypair.pubkey()), str(size_usd))
+                else:
+                    logger.info("Skipping fund transfer to subaccount %s as allocate_margin=False", sub_keypair.pubkey())
 
                 # 3. Save to database
                 strategy.subaccount_pubkey = str(sub_keypair.pubkey())
@@ -669,7 +655,7 @@ async def initialize_bot_for_user(
         available = float(summary.get("available_margin_collateral") or 0)
         margin = Decimal(str(available))
         min_margin = Decimal(str(settings.TRADING_MIN_MARGIN_USD))
-        if margin < min_margin:
+        if margin < min_margin and strategy_config.get("allocate_margin", True):
             raise InsufficientMarginError(
                 f"Insufficient Margin: available {margin} < minimum {min_margin} USD",
             )

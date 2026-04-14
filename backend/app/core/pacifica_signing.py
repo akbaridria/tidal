@@ -58,3 +58,84 @@ def build_signed_withdraw_request(
         "expiry_window": expiry_window_ms,
         **signature_payload
     }
+
+
+def build_signed_leverage_request(
+    keypair: Keypair,
+    symbol: str,
+    leverage: int,
+    *,
+    expiry_window_ms: int = 30_000,
+) -> dict[str, Any]:
+    """Return JSON body for ``POST /api/v1/account/leverage``."""
+    timestamp = int(time.time() * 1000)
+    
+    signature_header = {
+        "timestamp": timestamp,
+        "expiry_window": expiry_window_ms,
+        "type": "update_leverage",
+    }
+
+    signature_payload = {
+        "symbol": symbol,
+        "leverage": leverage,
+    }
+
+    combined_message = {
+        **signature_header,
+        "data": signature_payload
+    }
+    sorted_message = sort_json_keys(combined_message)
+    compact_json = json.dumps(sorted_message, separators=(",", ":"))
+    
+    signature = keypair.sign_message(compact_json.encode("utf-8"))
+    signature_b58 = base58.b58encode(bytes(signature)).decode("ascii")
+
+    return {
+        "account": str(keypair.pubkey()),
+        "signature": signature_b58,
+        "timestamp": timestamp,
+        "expiry_window": expiry_window_ms,
+        **signature_payload
+    }
+
+
+def build_signed_margin_request(
+    keypair: Keypair,
+    symbol: str,
+    isolated: bool,
+    *,
+    expiry_window_ms: int = 30_000,
+) -> dict[str, Any]:
+    """Return JSON body for ``POST /api/v1/account/margin``."""
+    timestamp = int(time.time() * 1000)
+    
+    signature_header = {
+        "timestamp": timestamp,
+        "expiry_window": expiry_window_ms,
+        "type": "update_margin_mode",
+    }
+
+    signature_payload = {
+        "symbol": symbol,
+        "is_isolated": isolated,
+    }
+
+    combined_message = {
+        **signature_header,
+        "data": signature_payload
+    }
+    sorted_message = sort_json_keys(combined_message)
+    compact_json = json.dumps(sorted_message, separators=(",", ":"))
+    
+    signature = keypair.sign_message(compact_json.encode("utf-8"))
+    signature_b58 = base58.b58encode(bytes(signature)).decode("ascii")
+
+    return {
+        "account": str(keypair.pubkey()),
+        "signature": signature_b58,
+        "timestamp": timestamp,
+        "expiry_window": expiry_window_ms,
+        **signature_payload
+    }
+

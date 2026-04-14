@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import uuid
+import datetime
 from typing import Optional, Any
 
-from sqlalchemy import String, Uuid, JSON
+from sqlalchemy import String, Uuid, JSON, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
 
 from app.models.base import Base
 
@@ -26,3 +28,8 @@ class Strategy(Base):
     
     subaccount_pubkey: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     subaccount_encrypted_pk: Mapped[Optional[bytes]] = mapped_column(nullable=True)
+    
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), 
+        server_default=func.now()
+    )

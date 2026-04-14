@@ -86,5 +86,57 @@ async def transfer_subaccount_fund(from_keypair: Keypair, to_public_key: str, am
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(url, json=request)
         if response.status_code != 200:
-            print(f"DEBUG: transfer_subaccount_fund failed {response.text}")
+            error_data = response.text
+            print(f"DEBUG: transfer_subaccount_fund failed {error_data}")
+            raise Exception(f"Pacifica API Error ({response.status_code}): {error_data}")
         response.raise_for_status()
+
+        response.raise_for_status()
+
+# Simple cache for list_subaccounts to avoid redundant hits on simultaneous bot detail requests
+_subaccounts_cache = {} # main_pubkey -> (timestamp, data)
+SUBACCOUNT_CACHE_TTL = 5.0 # seconds
+
+async def list_subaccounts(main_keypair: Keypair) -> list[Dict[str, Any]]:
+    main_public_key = str(main_keypair.pubkey())
+    now = time.time()
+    
+    # Check cache
+    if main_public_key in _subaccounts_cache:
+        ts, data = _subaccounts_cache[main_public_key]
+        if now - ts < SUBACCOUNT_CACHE_TTL:
+            return data
+
+    timestamp = int(now * 1_000)
+    expiry_window = 5_000
+    main_public_key = str(main_keypair.pubkey())
+
+    signature_header = {
+        "timestamp": timestamp,
+        "expiry_window": expiry_window,
+        "type": "list_subaccounts",
+    }
+    signature_payload = {}
+    
+    _, signature = sign_message(signature_header, signature_payload, main_keypair)
+
+    request = {
+        "account": main_public_key,
+        "signature": signature,
+        "timestamp": timestamp,
+        "expiry_window": expiry_window,
+    }
+
+    base = settings.PACIFICA_API_BASE_URL.rstrip("/")
+    url = f"{base}/api/v1/account/subaccount/list"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, json=request)
+        if response.status_code != 200:
+            print(f"DEBUG: list_subaccounts failed {response.text}")
+        response.raise_for_status()
+        data = response.json().get("data", {}).get("subaccounts", [])
+        
+        # Update cache
+        _subaccounts_cache[main_public_key] = (time.time(), data)
+        
+        return data
