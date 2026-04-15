@@ -12,6 +12,52 @@ To ensure that different trading strategies do not interfere with each other (e.
     * **Position Isolation**: Strategy A trading BTC-PERP will not block Strategy B from trading BTC-PERP.
     * **Risk Isolation**: If a strategy gets liquidated, it only affects the funds allocated to that specific subaccount.
 
+## Technical Flow (Core Application)
+
+The following diagram illustrates the complete technical lifecycle of the Tidal application, from user authentication to trade execution:
+
+```mermaid
+sequenceDiagram
+    participant User as User (Phantom/Main Wallet)
+    participant Front as Frontend (React)
+    participant API as Backend (FastAPI)
+    participant DB as Database (Postgres)
+    participant chain as Solana (On-Chain)
+    participant PAC as Pacifica Protocol (API)
+
+    Note over User, PAC: Phase 1: Authentication & Onboarding
+    User->>Front: Click Login
+    Front->>API: GET /auth/challenge?pubkey=...
+    API->>DB: Get/Create User & Save Nonce
+    API-->>Front: Nonce (UUID)
+    Front->>User: Request Signature (Nonce)
+    User-->>Front: signed_message
+    Front->>API: POST /auth/login {signature, message}
+    API->>API: Verify Ed25519 Signature
+    API-->>Front: JWT Access Token
+    
+    Note over User, PAC: Phase 2: Bot Setup
+    Front->>API: POST /generate-wallet (Authenticated)
+    API->>API: Generate Solana Keypair
+    API->>API: Encrypt Private Key (Fernet)
+    API->>DB: Store BotWallet {pubkey, encrypted_key}
+    API-->>Front: Bot Public Key
+
+    Note over User, PAC: Phase 3: Funding
+    User->>chain: Transfer USDP (Main -> Bot)
+    Front->>API: POST /wallet/deposit-to-pacifica {amount}
+    API->>API: Decrypt Bot Key
+    API->>chain: deposit_usdc_to_pacifica_margin(...)
+    chain-->>API: tx_signature
+    API-->>Front: Success
+
+    Note over User, PAC: Phase 4: Strategy Execution
+    Front->>API: POST /backtest or /strategy/start
+    API->>PAC: Fetch Market Data / Create Subaccount
+    API->>API: StrategyEvaluator (Signals + Risk)
+    API->>PAC: Execute Market Orders (Signed by Bot)
+```
+
 ## User Journey
 
 ```mermaid
