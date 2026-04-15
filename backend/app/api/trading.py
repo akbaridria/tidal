@@ -132,6 +132,9 @@ async def run_backtest(
     body: BacktestBody,
     current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Backtest request: symbol=%s, timeframe=%s, config=%s", body.symbol, body.timeframe, body.strategy_config)
     df = await fetch_historical_klines(body.symbol, body.timeframe)
     return await run_in_threadpool(run_vectorbt_backtest, df, body.strategy_config)
 

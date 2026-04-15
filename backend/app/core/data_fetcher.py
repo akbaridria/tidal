@@ -71,17 +71,44 @@ async def fetch_historical_klines(
     symbol: str,
     timeframe: str,
     limit: int = 1000,
+    start_time: Optional[int] = None,
+    end_time: Optional[int] = None,
 ) -> pd.DataFrame:
     """
     Fetch historical candlesticks from the Pacifica REST API (GET).
 
-    Query params follow the public Pacifica pattern: ``symbol``, ``interval`` (timeframe),
-    and a bounded window; a ``limit`` is sent for the placeholder server.
+    If start_time or end_time are not provided, they are calculated relative to 'now'
+    based on the limit and timeframe.
     """
-    base_url = os.environ.get("PACIFICA_KLINE_URL", _DEFAULT_PACIFICA_KLINE_URL)
+    base_url = os.environ.get("PACIFICA_KLINE_URL")
+    if not base_url:
+        api_base = os.environ.get("PACIFICA_API_BASE_URL", "https://test-api.pacifica.fi")
+        base_url = f"{api_base.rstrip('/')}/api/v1/kline"
+
+    def get_ms(tf: str) -> int:
+        unit = tf[-1]
+        val = int(tf[:-1])
+        mult = 60 * 1000
+        if unit == "h": mult *= 60
+        if unit == "d": mult *= 60 * 24
+        return val * mult
+
+    import time
+    now_ms = int(time.time() * 1000)
+    
+    # Defaults
+    actual_end = end_time if end_time is not None else now_ms
+    if start_time is not None:
+        actual_start = start_time
+    else:
+        interval_ms = get_ms(timeframe)
+        actual_start = actual_end - (limit * interval_ms)
+
     params = {
         "symbol": symbol,
         "interval": timeframe,
+        "start_time": actual_start,
+        "end_time": actual_end,
         "limit": limit,
     }
     async with httpx.AsyncClient(timeout=60.0) as client:

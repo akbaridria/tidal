@@ -141,9 +141,13 @@ class StrategyEvaluator:
         """Evaluates the strategy for the entire DataFrame and returns a boolean Series."""
         conditions = self.config.get("conditions")
         if not conditions:
+            logger.warning("No conditions found in strategy config")
             return pd.Series(False, index=self.df.index)
         
-        return self._evaluate_recursive_vectorized(conditions)
+        logger.info("Evaluating vectorized conditions: %s", conditions)
+        res = self._evaluate_recursive_vectorized(conditions)
+        logger.info("Vectorized evaluation complete. Signal count: %d", int(res.sum()))
+        return res
 
     def get_state_snapshot(self) -> dict[str, float]:
         """Collects current indicator values and price for logging."""

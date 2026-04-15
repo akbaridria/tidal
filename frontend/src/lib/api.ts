@@ -113,6 +113,19 @@ export async function createStrategyFromPreset(body: {
   return request("/strategies/from-preset", { method: "POST", body: JSON.stringify(body) })
 }
 
+export async function runBacktest(body: {
+  symbol: string
+  timeframe: string
+  strategy_config: any
+}): Promise<{
+  "Total Return [%]": number
+  "Win Rate [%]": number
+  "Max Drawdown [%]": number
+  "Total Trades": number
+}> {
+  return request("/backtest", { method: "POST", body: JSON.stringify(body) })
+}
+
 export async function startBot(strategy_id: string, allocate_margin: boolean = true): Promise<Record<string, unknown>> {
   return request("/start-bot", { method: "POST", body: JSON.stringify({ strategy_id, allocate_margin }) })
 }

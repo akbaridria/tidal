@@ -23,6 +23,7 @@ interface ActiveBotsDashboardProps {
   error: string | null
   onRefresh: () => void
   onLaunchBot: () => void
+  hasBotWallet: boolean
 }
 
 export function ActiveBotsDashboard({
@@ -31,6 +32,7 @@ export function ActiveBotsDashboard({
   error,
   onRefresh,
   onLaunchBot,
+  hasBotWallet,
   availableMargin = 0,
 }: ActiveBotsDashboardProps & { availableMargin?: number }) {
   const [logsStrategyId, setLogsStrategyId] = useState<string | null>(null)
@@ -52,11 +54,12 @@ export function ActiveBotsDashboard({
           <div className="flex items-center gap-2">
             <Button
               onClick={onLaunchBot}
+              disabled={!hasBotWallet}
               size="sm"
-              className="cursor-pointer rounded-xl border-0 bg-gradient-to-r from-[#00D4AA] to-[#0088CC] text-white"
+              className="cursor-pointer rounded-xl border-0 bg-gradient-to-r from-[#00D4AA] to-[#0088CC] text-white disabled:opacity-30 disabled:grayscale"
             >
               <PlusIcon className=" size-4" />
-              Launch Bot
+              {hasBotWallet ? "Launch Bot" : "Wallet Required"}
             </Button>
           </div>
         </div>
@@ -90,10 +93,11 @@ export function ActiveBotsDashboard({
             </div>
             <Button
               onClick={onLaunchBot}
-              className="cursor-pointer rounded-xl border-0 bg-gradient-to-r from-[#00D4AA] to-[#0088CC] text-white"
+              disabled={!hasBotWallet}
+              className="cursor-pointer rounded-xl border-0 bg-gradient-to-r from-[#00D4AA] to-[#0088CC] text-white disabled:opacity-30 disabled:grayscale"
             >
               <PlusIcon className="mr-2 size-4" />
-              Launch New Bot
+              {hasBotWallet ? "Launch New Bot" : "Generate Wallet"}
             </Button>
           </div>
         )}

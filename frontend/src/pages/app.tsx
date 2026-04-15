@@ -6,6 +6,7 @@ import {
   HomeIcon,
   WalletIcon,
   LogOutIcon,
+  BarChart3Icon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TreasuryDashboard } from "@/components/treasury-dashboard"
 import { ActiveBotsDashboard } from "@/components/active-bots-dashboard"
+import { BacktestDashboard } from "@/components/backtest-dashboard"
 import { CreateBotModal } from "@/components/create-bot-modal"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -234,58 +236,69 @@ export function AppPage() {
                 </span>
               )}
             </TabsTrigger>
-          </TabsList>
+          <TabsTrigger value="backtest" className="gap-1.5">
+            <BarChart3Icon className="size-3.5" />
+            Backtest
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Overview tab */}
-          <TabsContent value="overview">
-            <OverviewTab
-              balances={balances}
-              strategies={strategies}
-              onGoToTreasury={() => document.querySelector<HTMLButtonElement>('[data-value="treasury"]')?.click()}
-              onLaunchBot={() => setCreateBotOpen(true)}
-            />
-          </TabsContent>
+        {/* Overview tab */}
+        <TabsContent value="overview">
+          <OverviewTab
+            balances={balances}
+            strategies={strategies}
+            hasBotWallet={!!botPublicKey}
+            onGoToTreasury={() => document.querySelector<HTMLButtonElement>('[data-value="treasury"]')?.click()}
+            onLaunchBot={() => setCreateBotOpen(true)}
+          />
+        </TabsContent>
 
-          {/* Treasury tab */}
-          <TabsContent value="treasury">
-            <TreasuryDashboard
-              balances={balances}
-              loading={balancesLoading}
-              error={balancesError}
-              onRefresh={fetchBalances}
-              botPublicKey={botPublicKey}
-              onGenerateWallet={handleGenerateWallet}
-              generatingWallet={generatingWallet}
-            />
-          </TabsContent>
+        {/* Treasury tab */}
+        <TabsContent value="treasury">
+          <TreasuryDashboard
+            balances={balances}
+            loading={balancesLoading}
+            error={balancesError}
+            onRefresh={fetchBalances}
+            botPublicKey={botPublicKey}
+            onGenerateWallet={handleGenerateWallet}
+            generatingWallet={generatingWallet}
+          />
+        </TabsContent>
 
-          {/* Bots tab */}
-          <TabsContent value="bots">
-            <ActiveBotsDashboard
-              strategies={strategies}
-              loading={strategiesLoading}
-              error={strategiesError}
-              onRefresh={fetchStrategies}
-              onLaunchBot={() => setCreateBotOpen(true)}
-              availableMargin={availableMargin}
-            />
-          </TabsContent>
-        </Tabs>
-      </main>
+        {/* Bots tab */}
+        <TabsContent value="bots">
+          <ActiveBotsDashboard
+            strategies={strategies}
+            loading={strategiesLoading}
+            error={strategiesError}
+            onRefresh={fetchStrategies}
+            onLaunchBot={() => setCreateBotOpen(true)}
+            availableMargin={availableMargin}
+            hasBotWallet={!!botPublicKey}
+          />
+        </TabsContent>
 
-      {/* Create Bot Modal */}
-      <CreateBotModal
-        open={createBotOpen}
-        onClose={() => setCreateBotOpen(false)}
-        onSuccess={() => {
-          setCreateBotOpen(false)
-          fetchStrategies()
-        }}
-        presets={presets}
-        loadingPresets={presetsLoading}
-        availableMargin={availableMargin}
-      />
-    </div>
+        {/* Backtest tab */}
+        <TabsContent value="backtest">
+          <BacktestDashboard />
+        </TabsContent>
+      </Tabs>
+    </main>
+
+      {/* Create Bot Modal */ }
+  <CreateBotModal
+    open={createBotOpen}
+    onClose={() => setCreateBotOpen(false)}
+    onSuccess={() => {
+      setCreateBotOpen(false)
+      fetchStrategies()
+    }}
+    presets={presets}
+    loadingPresets={presetsLoading}
+    availableMargin={availableMargin}
+  />
+    </div >
   )
 }
 
@@ -296,11 +309,13 @@ function OverviewTab({
   strategies,
   onGoToTreasury: _onGoToTreasury,
   onLaunchBot,
+  hasBotWallet,
 }: {
   balances: Awaited<ReturnType<typeof getWalletBalances>> | null
   strategies: Strategy[]
   onGoToTreasury: () => void
   onLaunchBot: () => void
+  hasBotWallet: boolean
 }) {
   const activeCount = strategies.filter((s) => s.is_active !== false).length
   const onChain = balances?.user_wallet_balance.usdc ?? 0
@@ -340,10 +355,11 @@ function OverviewTab({
         </div>
         <Button
           onClick={onLaunchBot}
-          className="cursor-pointer shrink-0 rounded-xl border-0 bg-gradient-to-r from-[#00D4AA] to-[#0088CC] text-white"
+          disabled={!hasBotWallet}
+          className="cursor-pointer shrink-0 rounded-xl border-0 bg-gradient-to-r from-[#00D4AA] to-[#0088CC] text-white disabled:opacity-30 disabled:grayscale"
         >
           <BotIcon className="mr-2 size-4" />
-          Launch New Bot
+          {hasBotWallet ? "Launch New Bot" : "Generate Wallet to Launch"}
         </Button>
       </div>
     </div>

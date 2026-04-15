@@ -1,3 +1,13 @@
+import logging
+import sys
+
+# Configure logging at the module level
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stdout
+)
+
 from contextlib import asynccontextmanager
 
 from arq import create_pool
@@ -14,16 +24,33 @@ from app.models.base import Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    app.state.arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+    import logging
+    logger = logging.getLogger("startup")
+    logger.info("Initializing application startup...")
+    
+    try:
+        logger.info("Connecting to database and creating tables...")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database initialized successfully.")
+    except Exception as e:
+        logger.error("Database initialization failed: %s", e, exc_info=True)
+        raise
+
+    try:
+        logger.info("Initializing ARQ pool for Redis...")
+        app.state.arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+        logger.info("Redis initialized successfully.")
+    except Exception as e:
+        logger.error("Redis initialization failed: %s", e, exc_info=True)
+        # We might want to continue even if Redis fails, or crash. 
+        # For now, let's keep it required.
+        raise
     
     from app.core.database import AsyncSessionLocal
     from sqlalchemy import select
     from app.models.strategy import Strategy
     from app.worker.trading_manager import initialize_bot_for_user
-    import logging
-    logger = logging.getLogger("startup")
     
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Strategy).where(Strategy.is_active == True))
