@@ -76,6 +76,17 @@ export function TreasuryDashboard({
   const [isIsolated, setIsIsolated] = useState(false)
   const [updatingLeverage, setUpdatingLeverage] = useState(false)
 
+  const { connection } = useConnection()
+  const [rpcSolBalance, setRpcSolBalance] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (botPublicKey) {
+      connection.getBalance(new PublicKey(botPublicKey))
+        .then(bal => setRpcSolBalance(bal / 1e9))
+        .catch(err => console.error("Failed to fetch live SOL balance", err))
+    }
+  }, [botPublicKey, connection, onRefresh])
+
   useEffect(() => {
     if (botPublicKey) {
       setLoadingLeverage(true)
@@ -201,6 +212,19 @@ export function TreasuryDashboard({
           </div>
         )}
 
+        {/* Low SOL Warning */}
+        {balances && (rpcSolBalance ?? balances.bot_wallet_balance.sol) < 0.005 && !loading && (
+          <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200/80">
+            <AlertCircleIcon className="size-4 shrink-0 text-amber-500" />
+            <div className="flex flex-col gap-0.5">
+              <p className="font-medium text-amber-400">Low SOL Balance for Fees</p>
+              <p className="opacity-70">
+                Your bot wallet has {(rpcSolBalance ?? balances.bot_wallet_balance.sol).toFixed(4)} SOL. You need a small amount of SOL (at least 0.01 Recommended) to pay for transaction fees when depositing or trading.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-10">
@@ -222,7 +246,7 @@ export function TreasuryDashboard({
               <BalanceCard
                 icon={<WalletIcon className="size-5" />}
                 label="Bot Treasury"
-                sublabel="Unallocated USDC"
+                sublabel={`${(rpcSolBalance ?? balances.bot_wallet_balance.sol).toFixed(4)} SOL for fees`}
                 value={balances.bot_wallet_balance.usdc}
                 accent="#0088CC"
                 actions={
