@@ -111,7 +111,19 @@ class StrategyEvaluator:
             if not field:
                 series = res.iloc[:, 0]
             else:
-                series = res[field]
+                if field in res.columns:
+                    series = res[field]
+                else:
+                    # Fuzzy matching: try to find the column by prefix or containment
+                    # This handles differences in suffixes between pandas-ta versions
+                    matches = [c for c in res.columns if c.startswith(field) or field in c]
+                    if matches:
+                        series = res[matches[0]]
+                        logger.info("Fuzzy matched field '%s' to column '%s'", field, matches[0])
+                    else:
+                        logger.error("Field '%s' not found in indicator %s columns: %s", 
+                                     field, indicator_name, res.columns.tolist())
+                        raise KeyError(f"Field '{field}' not found in {indicator_name}")
         else:
             series = res
         

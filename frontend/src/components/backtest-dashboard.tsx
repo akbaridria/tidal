@@ -22,6 +22,7 @@ import {
 } from "./strategy-builder"
 import { runBacktest } from "@/lib/api"
 import { toast } from "sonner"
+import { STRATEGY_PRESETS, type StrategyPreset } from "./strategy-presets"
 
 const TRADING_PAIRS = [
   { symbol: "BTC", name: "Bitcoin" },
@@ -60,8 +61,8 @@ export function BacktestDashboard() {
     setResults(null)
     try {
       const config = compileStrategyConfig(conditions, logicOperator, side)
-      const strategyConfig = { 
-        ...config, 
+      const strategyConfig = {
+        ...config,
         interval: candleInterval,
         stop_loss_pct: stopLoss,
         take_profit_pct: takeProfit
@@ -81,6 +82,13 @@ export function BacktestDashboard() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleApplyPreset = (preset: StrategyPreset) => {
+    setConditions(preset.conditions.map(c => ({ ...c, id: Math.random().toString() })))
+    setLogicOperator(preset.logicOperator)
+    setSide(preset.side)
+    toast.info(`Applied ${preset.name} template`)
   }
 
   return (
@@ -173,6 +181,33 @@ export function BacktestDashboard() {
           </div>
         </div>
 
+        {/* Strategy Presets Section */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-semibold text-white/50 uppercase tracking-wider">Strategy Templates</h3>
+            <span className="text-[10px] text-white/20">Quick start with proven presets</span>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            {STRATEGY_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => handleApplyPreset(preset)}
+                className="flex min-w-[200px] flex-col gap-2 rounded-2xl border border-white/[0.04] bg-white/[0.02] p-4 text-left transition-all hover:border-[#00D4AA]/30 hover:bg-white/[0.04] active:scale-95 group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white group-hover:text-[#00D4AA] transition-colors">{preset.name}</span>
+                  <div className={`rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase ${preset.side === "buy" ? "bg-[#00D4AA]/10 text-[#00D4AA]" : "bg-[#ef4444]/10 text-[#ef4444]"}`}>
+                    {preset.side}
+                  </div>
+                </div>
+                <p className="text-[10px] leading-relaxed text-white/40 line-clamp-2">
+                  {preset.description}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-sm font-semibold text-white/50 uppercase tracking-wider">Logic Builder</h3>
@@ -192,7 +227,7 @@ export function BacktestDashboard() {
           size="lg"
           onClick={handleRunBacktest}
           disabled={loading || conditions.length === 0}
-          className="relative h-14 w-full cursor-pointer overflow-hidden rounded-2xl border-0 bg-gradient-to-r from-[#00D4AA] to-[#0088CC] px-8 text-white font-bold transition-all hover:scale-[1.02] active:scale-95 disabled:grayscale"
+          className="relative h-11 w-full cursor-pointer overflow-hidden rounded-2xl border-0 bg-gradient-to-r from-[#00D4AA] to-[#0088CC] px-8 text-white font-bold transition-all hover:scale-[1.02] active:scale-95 disabled:grayscale"
         >
           {loading ? (
             <div className="flex items-center gap-2">
@@ -201,7 +236,7 @@ export function BacktestDashboard() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <PlayIcon className="size-5 fill-current" />
+              <PlayIcon className="size-3 fill-current" />
               <span>Run Backtest Simulation</span>
             </div>
           )}

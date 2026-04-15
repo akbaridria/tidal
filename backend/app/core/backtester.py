@@ -53,13 +53,14 @@ def run_vectorbt_backtest(df: pd.DataFrame, strategy_config: dict) -> dict:
     
     if side == "buy":
         entries = signals
-        # We still exit if signal becomes false, OR if SL/TP is hit (handled by vbt)
-        exits = ~signals 
+        # We no longer force an exit when signal is false. 
+        # This allows trades to stay open until SL/TP is hit.
+        exits = pd.Series(False, index=signals.index)
         direction = "longonly"
     else:
         # For 'sell' side, we treat the signal as a 'Short' entry
         entries = signals
-        exits = ~signals
+        exits = pd.Series(False, index=signals.index)
         direction = "shortonly"
 
     pf = vbt.Portfolio.from_signals(
