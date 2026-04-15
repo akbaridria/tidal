@@ -1,6 +1,6 @@
 import { getCookie, setCookie, removeCookie } from "@/lib/cookies"
 
-const BASE_URL = "https://api-tidal.akbaridria.com"
+const BASE_URL = "https://api-tidal.akbaridria.cloud"
 
 function getToken(): string | null {
   return getCookie()
